@@ -44,6 +44,11 @@ while True:
             else:
                 client_socket.send(b"HTTP/1.1 307 Temporary Redirect\r\nLocation: /\r\nCache-Control: no-store, no-cache, must-revalidate, max-age=0\r\nContent-Type: text/html\r\nSet-Cookie: key="+str(time.time_ns()).encode("utf-8")+b"\r\n\r\n<html><body><h1>Hiii</h1></body></html>")
             client_socket.close()
+        elif method == "GET" and uri == "/test.html":
+            readfile = open("test.html", "rb")
+            client_socket.send(b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n" + readfile.read().encode("utf-8"))
+            readfile.close()
+            client_socket.close()
         elif method == "GET" and len(uri) == 4:
             client_socket.send(b"HTTP/1.1 " + uri[1:].encode("utf-8") + b" HI\r\nContent-Type: text/html\r\n\r\n<html><body><h1>Hiiiii!</h1></body></html>")
     except Exception as e:
