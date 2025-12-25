@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Aroma</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+    .box { background: #f0f0f0; padding: 15px; margin-bottom: 20px; border-radius: 8px; }
+    h3 { margin-top: 0; }
+    .metric { display: flex; justify-content: space-between; border-bottom: 1px solid #ccc; padding: 5px 0; }
+    .val { font-weight: bold; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h2>Aroma</h2>
+  <div id='results'>Running measurement...</div>
+
+  <script>
+    const endpoint = '/req.json';
+    const numMeasurements = 10;
+    let measurements = [];
+
+    async function runMeasurements() {
+      const resultsDiv = document.getElementById('results');
+      
+      for (let i = 0; i < numMeasurements; i++) {
+        resultsDiv.innerHTML = `Running measurement ${i + 1} / ${numMeasurements}...`;
+        
+        const currentEndpoint = `${endpoint}`;
+        
+        try {
+          const response = await fetch(currentEndpoint);
+          const serverData = await response.json();
+          
+          const fullUrl = new URL(currentEndpoint, window.location.href).href;
+          const entries = performance.getEntriesByName(fullUrl);
+          const entry = entries[entries.length - 1];
+
+          if (entry) {
+            measurements.push({
+              entry: entry,
+              serverData: serverData
+            });
+          }
+        } catch (e) {
+          console.error("Measurement failed", e);
+        }
+        
+        await new Promise(r => setTimeout(r, 100));
+      }
+
+      calculateAndDisplayResults();
+    }
+
+    function calculateAndDisplayResults() {
+      if (measurements.length === 0) {
+        document.getElementById('results').innerHTML = "Error: No measurements collected.";
+        return;
+      }
+
+      function getTrimmedAverage(values) {
+        if (values.length < 3) {
+          const sum = values.reduce((a, b) => a + b, 0);
+          return sum / values.length;
+        }
+        
+        values.sort((a, b) => a - b);
+        
+        const trimmed = values.slice(1, -1);
+        
+        const sum = trimmed.reduce((a, b) => a + b, 0);
+        return sum / trimmed.length;
+      }
+
+      const serverRtts = [];
+      const serverMinRtts = [];
+      const clientTcps = [];
+      const clientTlsOverheads = [];
+      const httpRtts = [];
+      const durations = [];
+      
+      const lastData = measurements[measurements.length - 1].serverData;
+      const protocol = lastData.protocol || 'tcp';
+
+      measurements.forEach(m => {
+        const entry = m.entry;
+        const sData = m.serverData;
+
+        serverRtts.push(parseFloat(sData.rtt_us || 0));
+        serverMinRtts.push(parseFloat(sData.min_rtt_us || 0));
+
+        const clientTcp = entry.connectEnd - entry.connectStart;
+        const clientTls = entry.secureConnectionStart > 0 ? (entry.requestStart - entry.secureConnectionStart) : 0;
+        const httpRtt = entry.responseStart - entry.requestStart;
+
+        clientTcps.push(clientTcp);
+        clientTlsOverheads.push(clientTls);
+        httpRtts.push(httpRtt);
+        durations.push(entry.duration);
+      });
+
+      const avgServerRtt = (getTrimmedAverage(serverRtts) / 1000).toFixed(2);
+      const avgServerMinRtt = (getTrimmedAverage(serverMinRtts) / 1000).toFixed(2);
+      const avgClientTcp = getTrimmedAverage(clientTcps).toFixed(2);
+      const avgClientTls = getTrimmedAverage(clientTlsOverheads).toFixed(2);
+      const avgHttpRtt = getTrimmedAverage(httpRtts).toFixed(2);
+      const avgDuration = getTrimmedAverage(durations).toFixed(2);
+
+      lowestHttpRtt = Math.min(...httpRtts).toFixed(2);
+      highestServerRtt = (Math.max(...serverRtts) / 1000).toFixed(2);
+
+      const count = measurements.length;
+      const protocolLabel = protocol === 'quic' ? 'QUIC' : 'TCP';
+      
+      const usedCount = count >= 3 ? count - 2 : count;
+
+      const isProxy1 = parseFloat(lowestHttpRtt) > (2 * parseFloat(highestServerRtt));
+      const isProxy2 = parseFloat(avgServerRtt) > (10 * parseFloat(avgServerMinRtt));
+      const isProxy = isProxy1 || isProxy2;
+      
+      let proxyMsg = "";
+      if (isProxy) {
+          proxyMsg = `
+          <div class='box' style='background: #ffebee; border: 1px solid #ef9a9a;'>
+            <h3 style='color: #c62828; margin-top: 0;'>Proxy Detected</h3>
+            ${isProxy1 ? `<div class='metric' style='border-bottom: 0;'><span>(UNRELIABLE!) High TTFB relative to RTT:</span> <span class='val'>${avgHttpRtt}ms > 2x ${avgServerRtt}ms</span></div>` : ''}
+            ${isProxy2 ? `<div class='metric' style='border-bottom: 0;'><span>High RTT variance:</span> <span class='val'>${avgServerRtt}ms > 10x ${avgServerMinRtt}ms</span></div>` : ''}
+          </div>`;
+      }
+
+      const html = `
+        ${proxyMsg}
+        <div class='box'>
+          <h3>Layer 4: ${protocolLabel} (Trimmed Average of ${usedCount})</h3>
+          <div class='metric'><span>Highest Server RTT:</span> <span class='val'>${highestServerRtt} ms</span></div>
+          <div class='metric'><span>Server internal RTT estimate:</span> <span class='val'>${avgServerRtt} ms</span></div>
+          <div class='metric'><span>Server min RTT estimate:</span> <span class='val'>${avgServerMinRtt} ms</span></div>
+          <div class='metric'><span>Client measured Handshake:</span> <span class='val'>${avgClientTcp} ms</span></div>
+        </div>
+
+        <div class='box'>
+          <h3>Layer 7: HTTP (Trimmed Average of ${usedCount})</h3>
+          <div class='metric'><span>Lowest HTTP RTT:</span> <span class='val'>${lowestHttpRtt} ms</span></div>
+          <div class='metric'><span>Real HTTP RTT (TTFB):</span> <span class='val'>${avgHttpRtt} ms</span></div>
+          <div class='metric'><span>TLS Overhead:</span> <span class='val'>${avgClientTls} ms</span></div>
+          <div class='metric'><span>Total Fetch Duration:</span> <span class='val'>${avgDuration} ms</span></div>
+        </div>
+        
+        <small>Note: Highest and lowest values discarded. If Client Handshake average is low, connections were reused.</small>
+      `;
+
+      document.getElementById('results').innerHTML = html;
+    }
+
+    runMeasurements();
+  </script>
+</body>
+</html>

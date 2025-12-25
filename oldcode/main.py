@@ -1,14 +1,11 @@
-import socket
-import time
+import asyncio
 from handler import handle_request
 
-server_socket = socket.create_server(("0.0.0.0", 8080))
+async def handle_client(reader, writer):
+    client_address = writer.get_extra_info("peername")
+    print(f"\nNew connection from {client_address}")
 
-while True:
     try:
-        client_socket, client_address = server_socket.accept()
-        print(f"\nNew connection from {client_address}")
-
         request = {
             "method": "",
             "uri": "/",
@@ -21,9 +18,13 @@ while True:
             "cookies": dict(),
         }
 
-        raw_request = client_socket.recv(1024)
+        raw_request = await reader.read(1024)
+        if not raw_request:
+            return
+
         raw_request = raw_request.decode("utf-8")
         firstline = raw_request.split("\r\n")[0]
+        print(firstline)
         request["method"], request["uri"], request["protocol"] = firstline.strip().split(" ")
         request["headers"] = raw_request.split("\r\n")[1:-2]
         request["sorted_headers"] = sorted(request["headers"])
@@ -45,9 +46,21 @@ while True:
         request["raw_headerorder"] = request["raw_headerorder"][:-1]
         request["headerorder_nocookies"] = request["headerorder_nocookies"][:-1]
 
-        client_socket.send(handle_request(request).encode("utf-8"))
-        client_socket.close()
+        response = await handle_request(request)
+        writer.write(response.encode("utf-8"))
+        await writer.drain()
+
     except Exception as e:
-        print(e)
-        client_socket.close()
-        continue
+        print(f"Error: {e}")
+    finally:
+        writer.close()
+        await writer.wait_closed()
+
+
+async def main():
+    server = await asyncio.start_server(handle_client, "0.0.0.0", 8080)
+    async with server:
+        await server.serve_forever()
+
+if __name__ == "__main__":
+    asyncio.run(main())
