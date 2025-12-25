@@ -40,6 +40,10 @@ sub vcl_recv {
     error 603;
   }
 
+  if (req.url == "/") {
+    error 605;
+  }
+
   return(lookup);
 }
 
@@ -151,6 +155,14 @@ sub vcl_error {
     set obj.response = "OK";
     set obj.http.Content-Type = "text/html; charset=utf8";
     synthetic "<html><body><h1>Score: " + req.http.X-Aroma-Score + "</h1><a href=%22/info%22>Request Info</a></body></html>";
+    return(deliver);
+  }
+
+  if (obj.status == 605) {
+    set obj.status = 200;
+    set obj.response = "OK";
+    set obj.http.Content-Type = "text/html; charset=utf8";
+    synthetic "<html><body><h1>You don't seem to be using a TCP Proxy!</h1><p>(If you are using a VPN or any other kind of proxy that is not a TCP Proxy, this will not detect it)</p></body></html>";
     return(deliver);
   }
 

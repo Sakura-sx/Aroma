@@ -40,6 +40,10 @@ sub vcl_recv {
     error 603;
   }
 
+  if (req.url == "/") {
+    error 605;
+  }
+
   return(lookup);
 }
 
@@ -167,7 +171,6 @@ sub vcl_error {
           const response = await fetch(currentEndpoint);
           const serverData = await response.json();
           
-          // Get the precise network timing
           const fullUrl = new URL(currentEndpoint, window.location.href).href;
           const entries = performance.getEntriesByName(fullUrl);
           const entry = entries[entries.length - 1];
@@ -182,7 +185,6 @@ sub vcl_error {
           console.error("Measurement failed", e);
         }
         
-        // Small delay between requests
         await new Promise(r => setTimeout(r, 100));
       }
 
@@ -195,26 +197,20 @@ sub vcl_error {
         return;
       }
 
-      // Helper function to calculate trimmed average
-      // Sorts array, removes highest and lowest (if possible), then averages
       function getTrimmedAverage(values) {
         if (values.length < 3) {
-          // Can't drop 2 items if we don't have at least 3, return simple average
           const sum = values.reduce((a, b) => a + b, 0);
           return sum / values.length;
         }
         
-        // Sort numerically
         values.sort((a, b) => a - b);
         
-        // Remove first (lowest) and last (highest)
         const trimmed = values.slice(1, -1);
         
         const sum = trimmed.reduce((a, b) => a + b, 0);
         return sum / trimmed.length;
       }
 
-      // Collect values arrays
       const serverRtts = [];
       const serverMinRtts = [];
       const clientTcps = [];
@@ -229,11 +225,9 @@ sub vcl_error {
         const entry = m.entry;
         const sData = m.serverData;
 
-        // Server metrics
         serverRtts.push(parseFloat(sData.rtt_us || 0));
         serverMinRtts.push(parseFloat(sData.min_rtt_us || 0));
 
-        // Client metrics
         const clientTcp = entry.connectEnd - entry.connectStart;
         const clientTls = entry.secureConnectionStart > 0 ? (entry.requestStart - entry.secureConnectionStart) : 0;
         const httpRtt = entry.responseStart - entry.requestStart;
@@ -244,7 +238,6 @@ sub vcl_error {
         durations.push(entry.duration);
       });
 
-      // Calculate Averages (trimmed)
       const avgServerRtt = (getTrimmedAverage(serverRtts) / 1000).toFixed(2);
       const avgServerMinRtt = (getTrimmedAverage(serverMinRtts) / 1000).toFixed(2);
       const avgClientTcp = getTrimmedAverage(clientTcps).toFixed(2);
@@ -258,10 +251,8 @@ sub vcl_error {
       const count = measurements.length;
       const protocolLabel = protocol === 'quic' ? 'QUIC' : 'TCP';
       
-      // Determine how many were used
       const usedCount = count >= 3 ? count - 2 : count;
 
-      // Proxy Detection Logic
       const isProxy1 = parseFloat(lowestHttpRtt) > (2 * parseFloat(highestServerRtt));
       const isProxy2 = parseFloat(avgServerRtt) > (10 * parseFloat(avgServerMinRtt));
       const isProxy = isProxy1 || isProxy2;
@@ -271,7 +262,7 @@ sub vcl_error {
           proxyMsg = `
           <div class='box' style='background: #ffebee; border: 1px solid #ef9a9a;'>
             <h3 style='color: #c62828; margin-top: 0;'>Proxy Detected</h3>
-            ${isProxy1 ? `<div class='metric' style='border-bottom: 0;'><span>High TTFB relative to RTT:</span> <span class='val'>${avgHttpRtt}ms > 2x ${avgServerRtt}ms</span></div>` : ''}
+            ${isProxy1 ? `<div class='metric' style='border-bottom: 0;'><span>(UNRELIABLE!) High TTFB relative to RTT:</span> <span class='val'>${avgHttpRtt}ms > 2x ${avgServerRtt}ms</span></div>` : ''}
             ${isProxy2 ? `<div class='metric' style='border-bottom: 0;'><span>High RTT variance:</span> <span class='val'>${avgServerRtt}ms > 10x ${avgServerMinRtt}ms</span></div>` : ''}
           </div>`;
       }
@@ -321,6 +312,14 @@ sub vcl_error {
     set obj.response = "OK";
     set obj.http.Content-Type = "text/html; charset=utf8";
     synthetic "<html><body><h1>Score: " + req.http.X-Aroma-Score + "</h1><a href=%22/info%22>Request Info</a></body></html>";
+    return(deliver);
+  }
+
+  if (obj.status == 605) {
+    set obj.status = 200;
+    set obj.response = "OK";
+    set obj.http.Content-Type = "text/html; charset=utf8";
+    synthetic "<html><body><h1>You don't seem to be using a TCP Proxy!</h1><p>(If you are using a VPN or any other kind of proxy that is not a TCP Proxy, this will not detect it)</p></body></html>";
     return(deliver);
   }
 

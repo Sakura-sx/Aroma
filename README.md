@@ -17,7 +17,7 @@ If you want to check out Aroma for yourself, you can go to:
 
 [https://aroma.global.ssl.fastly.net/](https://aroma.global.ssl.fastly.net/).
 
-And you should see example.com if you are not using a TCP Proxy and a block page if you are using a proxy.
+And you should see an "allowed" page if you are not using a TCP Proxy and a block page if you are using a proxy.
 
 If you want to get your score you can go to [https://aroma.global.ssl.fastly.net/score](https://aroma.global.ssl.fastly.net/score).
 
