@@ -67,3 +67,9 @@ For the situations where we can see the proxy RTT to be less than 1ms. The clien
 A simple algorithm for calculating the score would be (`proxy RTT`)/(`non-proxy RTT`), which is what I will be doing in this proof of concept.
 
 Any sufficiently large internet service can collect all the network timing data they can, get a baseline, compare it to the data known proxies generate, and with this be able to create scoring algorithms that measure the proxy likelyhood.
+
+
+
+# Contact
+You can reach out to me here:
+[aroma_contact@proton.me](mailto:aroma_contact@proton.me)
