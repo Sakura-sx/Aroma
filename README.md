@@ -21,6 +21,11 @@ And you should see an "allowed" page if you are not using a TCP Proxy and a bloc
 
 If you want to get your score you can go to [https://aroma.global.ssl.fastly.net/score](https://aroma.global.ssl.fastly.net/score).
 
+# SPONSORS
+## [Synthient](https://synthient.com)
+[![Synthient.com Banner](assets/Synthient-Brand-Banner1.jpg)](https://synthient.com)
+> [Synthient provides real-time data on residential proxies, VPNs and malicious IP addresses enabling businesses to detect fraudulent traffic.](https://synthient.com)
+
 # TL;DR explanation
 This is done by measuring the minimum TCP RTT ([client.socket.tcpi_min_rtt](https://www.fastly.com/documentation/reference/vcl/variables/client-connection/client-socket-tcpi-min-rtt/)) seen and the smoothed TCP RTT ([client.socket.tcpi_rtt](https://www.fastly.com/documentation/reference/vcl/variables/client-connection/client-socket-tcpi-rtt/)). I am getting this data by using Fastly Custom VCL, they get this data from the Linux kernel (struct [tcp_info](https://github.com/torvalds/linux/blob/ccd1cdca5cd433c8a5dff78b69a79b31d9b77ee1/include/uapi/linux/tcp.h#L229) -> [tcpi_min_rtt](https://github.com/torvalds/linux/blob/ccd1cdca5cd433c8a5dff78b69a79b31d9b77ee1/include/uapi/linux/tcp.h#L279) and [tcpi_rtt](https://github.com/torvalds/linux/blob/ccd1cdca5cd433c8a5dff78b69a79b31d9b77ee1/include/uapi/linux/tcp.h#L259)). I am using Fastly for the Demo since they have PoPs all around the world and they expose [TCP socket data](https://www.fastly.com/documentation/reference/vcl/variables/client-connection/) to me.
 
